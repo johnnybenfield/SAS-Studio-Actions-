@@ -1,0 +1,47 @@
+name: Fourth Monday Bug Report
+
+# Trigger on the fourth Monday of each month at 9 AM UTC
+on:
+  schedule:
+    # Cron runs at 9 AM UTC on the 22nd-28th of each month
+    - cron: '0 9 22-28 * 1'
+
+  # Allow manual trigger from Actions tab
+  workflow_dispatch:
+
+jobs:
+  generate-bug-report:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Run SAS SQL Query
+        env:
+          SAS_SERVER: ${{ secrets.SAS_SERVER }}
+          SAS_USERNAME: ${{ secrets.SAS_USERNAME }}
+          SAS_PASSWORD: ${{ secrets.SAS_PASSWORD }}
+          SAS_PORT: ${{ secrets.SAS_PORT }}
+        run: |
+          echo "Running Fourth Monday Bug Report Query..."
+          echo "Target table: cqm_prod.report_mart.fourth_monday_of_month"
+          
+          # Configure with your SAS connection method:
+          # Option 1: SAS command line
+          # sas -sysin fourth_monday_bug_report.sql -log report.log -print report.lst
+          
+          # Option 2: SAS Viya REST API
+          # curl -X POST $SAS_SERVER/api/jobs \
+          #   -H "Authorization: Bearer $SAS_TOKEN" \
+          #   -d @query.json
+      
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bug-report-output
+          path: |
+            report.log
+            report.lst
+          retention-days: 30
