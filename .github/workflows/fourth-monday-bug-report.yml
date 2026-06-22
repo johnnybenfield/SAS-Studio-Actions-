@@ -15,7 +15,7 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4.1.7
       
       - name: Run SAS SQL Query
         env:
@@ -27,18 +27,12 @@ jobs:
           echo "Running Fourth Monday Bug Report Query..."
           echo "Target table: cqm_prod.report_mart.fourth_monday_of_month"
           
-          # Configure with your SAS connection method:
-          # Option 1: SAS command line
-          # sas -sysin fourth_monday_bug_report.sql -log report.log -print report.lst
-          
-          # Option 2: SAS Viya REST API
-          # curl -X POST $SAS_SERVER/api/jobs \
-          #   -H "Authorization: Bearer $SAS_TOKEN" \
-          #   -d @query.json
+          # SAS command line execution
+          sas -sysin fourth_monday_bug_report.sql -log report.log -print report.lst
       
       - name: Upload results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4.3.1
         with:
           name: bug-report-output
           path: |
