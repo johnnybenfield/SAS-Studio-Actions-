@@ -1,9 +1,10 @@
 /* SAS Studio Action: Fourth Monday Bug Report
    Creates a table with open bug tickets for Global Engineering
    across the fourth Monday of each month for 2026
+   Output: report_mart.fourth_monday_of_month in cqm_prod database
 */
 
-CREATE TABLE WORK.fourth_monday_of_month AS
+CREATE TABLE cqm_prod.report_mart.fourth_monday_of_month AS
 
 WITH snapshot_dates AS (
     -- Define the fourth Monday of each month for 2026
@@ -65,6 +66,6 @@ WHERE
 GROUP BY s.snapshot_dt
 ORDER BY s.snapshot_dt;
 
-/* Output table: WORK.fourth_monday_of_month
+/* Output table: cqm_prod.report_mart.fourth_monday_of_month
    Contains: snapshot_dt and open_ticket_count for each fourth Monday
 */
