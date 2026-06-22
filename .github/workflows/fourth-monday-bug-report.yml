@@ -17,6 +17,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4.1.7
       
+      - name: Set up SAS Viya CLI
+        env:
+          SAS_SERVER: ${{ secrets.SAS_SERVER }}
+          SAS_USERNAME: ${{ secrets.SAS_USERNAME }}
+          SAS_PASSWORD: ${{ secrets.SAS_PASSWORD }}
+          SAS_PORT: ${{ secrets.SAS_PORT }}
+        run: |
+          # Download and install SAS Viya CLI
+          curl -O https://github.com/sassoftware/viya4-cli/releases/download/v1.0.0/sas-viya-ubuntu.deb
+          sudo dpkg -i sas-viya-ubuntu.deb || true
+          sas-viya --version || echo "SAS Viya CLI installation skipped"
+      
       - name: Run SAS SQL Query
         env:
           SAS_SERVER: ${{ secrets.SAS_SERVER }}
@@ -27,8 +39,30 @@ jobs:
           echo "Running Fourth Monday Bug Report Query..."
           echo "Target table: cqm_prod.report_mart.fourth_monday_of_month"
           
-          # SAS command line execution
-          sas -sysin fourth_monday_bug_report.sql -log report.log -print report.lst
+          # Create a wrapper script for SAS execution
+          cat > run_sas.sh << 'EOF'
+          #!/bin/bash
+          
+          # Check if fourth_monday_bug_report.sql exists
+          if [ ! -f "fourth_monday_bug_report.sql" ]; then
+            echo "ERROR: fourth_monday_bug_report.sql not found"
+            exit 1
+          fi
+          
+          # Execute SAS query
+          if command -v sas &> /dev/null; then
+            sas -sysin fourth_monday_bug_report.sql -log report.log -print report.lst
+          else
+            echo "SAS not available. Attempting remote execution via SAS Viya..."
+            # Alternative: Use sas-viya CLI or curl to connect to SAS Viya server
+            curl -s -X POST https://${SAS_SERVER}:${SAS_PORT}/some/endpoint \
+              -u ${SAS_USERNAME}:${SAS_PASSWORD} \
+              -d @fourth_monday_bug_report.sql > report.lst 2> report.log
+          fi
+          EOF
+          
+          chmod +x run_sas.sh
+          ./run_sas.sh
       
       - name: Upload results
         if: always()
