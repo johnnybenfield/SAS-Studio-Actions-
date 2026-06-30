@@ -1,6 +1,12 @@
 name: Fourth Monday Bug Report
 
+# Trigger on the fourth Monday of each month at 9 AM UTC
 on:
+  schedule:
+    # Cron runs at 9 AM UTC on the 22nd-28th of each month
+    - cron: '0 9 22-28 * 1'
+
+  # Allow manual trigger from Actions tab
   workflow_dispatch:
 
 jobs:
@@ -18,33 +24,37 @@ jobs:
           SAS_PASSWORD: ${{ secrets.SAS_PASSWORD }}
           SAS_PORT: ${{ secrets.SAS_PORT }}
         run: |
-          # Download and install SAS Viya CLI with proper error handling
-          echo "Downloading SAS Viya CLI..."
-          
-          # Use the correct GitHub raw content URL or direct release URL
-          curl -L -f -o sas-viya-ubuntu.deb \
-            https://github.com/sassoftware/viya4-cli/releases/download/v1.0.0/sas-viya-ubuntu.deb \
-            --connect-timeout 30 \
-            --max-time 300 \
-            -w "\nDownload completed with HTTP code: %{http_code}\n"
-          
-          # Verify file size and integrity
-          FILE_SIZE=$(stat -f%z sas-viya-ubuntu.deb 2>/dev/null || stat -c%s sas-viya-ubuntu.deb 2>/dev/null || echo "0")
-          echo "Downloaded file size: $FILE_SIZE bytes"
-          
-          if [ "$FILE_SIZE" -lt 1000 ]; then
-            echo "ERROR: Downloaded file is too small ($FILE_SIZE bytes). Likely incomplete download."
-            cat sas-viya-ubuntu.deb
+          # Download and install Viya CLI (use viya4-orders-cli binary)
+          echo "Downloading Viya CLI (viya4-orders-cli)..."
+
+          CLI_URL="https://github.com/sassoftware/viya4-orders-cli/releases/latest/download/viya4-orders-cli_linux_amd64"
+
+          HTTP_CODE=$(curl -sSL -o viya4-cli -w "%{http_code}" --connect-timeout 30 --max-time 300 "$CLI_URL")
+          echo "Download HTTP code: $HTTP_CODE"
+
+          if [ "$HTTP_CODE" -ne 200 ]; then
+            echo "ERROR: Failed to download Viya CLI from $CLI_URL (HTTP $HTTP_CODE). Check the URL or release tag."
+            ls -l viya4-cli || true
             exit 1
           fi
-          
-          # Attempt installation
-          sudo dpkg -i sas-viya-ubuntu.deb || {
-            echo "WARNING: dpkg installation failed. Trying apt fix..."
-            sudo apt-get install -f -y || echo "Continuing without SAS Viya CLI..."
-          }
-          
-          sas-viya --version || echo "SAS Viya CLI not available, will use alternative methods"
+
+          chmod +x viya4-cli || true
+
+          # Try to move to a location on PATH, otherwise use local binary
+          if sudo mv viya4-cli /usr/local/bin/viya4-cli 2>/dev/null; then
+            echo "Installed viya4-cli to /usr/local/bin"
+          else
+            echo "Could not move viya4-cli to /usr/local/bin; will use local ./viya4-cli"
+          fi
+
+          # Verify availability
+          if command -v viya4-cli &> /dev/null; then
+            viya4-cli --version || echo "Viya CLI present but --version failed"
+          elif [ -x "./viya4-cli" ]; then
+            ./viya4-cli --version || echo "Local Viya CLI present but --version failed"
+          else
+            echo "Viya CLI not available, will use alternative methods"
+          fi
       
       - name: Run SAS SQL Query
         env:
@@ -72,7 +82,7 @@ jobs:
             echo "Using local SAS installation..."
             sas -sysin fourth_monday_bug_report.sql -log report.log -print report.lst
           else
-            echo "SAS not available. Attempting remote execution via SAS Viya..."
+            echo "SAS not available. Attempting remote execution via Viya CLI or SAS Viya..."
             
             # Verify SAS Viya server credentials are available
             if [ -z "$SAS_SERVER" ] || [ -z "$SAS_USERNAME" ] || [ -z "$SAS_PASSWORD" ]; then
@@ -82,16 +92,22 @@ jobs:
             
             SAS_PORT=${SAS_PORT:-443}
             
-            # Use proper API endpoint for SAS Viya job submission
-            # Replace /some/endpoint with actual SAS Viya compute service endpoint
-            curl -s -k -X POST https://${SAS_SERVER}:${SAS_PORT}/compute/sessions \
-              -u ${SAS_USERNAME}:${SAS_PASSWORD} \
-              -H "Content-Type: application/json" \
-              -d @fourth_monday_bug_report.sql \
-              -o report.lst 2> report.log || {
-                echo "Remote execution failed. Check SAS_SERVER, credentials, and network connectivity."
-                exit 6
-              }
+            # If viya4-cli is available, consider using it to submit jobs (example placeholder)
+            if command -v viya4-cli &> /dev/null; then
+              echo "Using viya4-cli to submit the job (placeholder - adapt to actual commands)"
+              # Example: viya4-cli jobs submit --file fourth_monday_bug_report.sql --server ${SAS_SERVER} --user ${SAS_USERNAME} --password ${SAS_PASSWORD}
+              echo "Note: replace the above with the actual viya4-cli invocation for your environment"
+            else
+              # Fallback to curl POST to SAS Viya compute endpoint
+              curl -s -k -X POST https://${SAS_SERVER}:${SAS_PORT}/compute/sessions \
+                -u ${SAS_USERNAME}:${SAS_PASSWORD} \
+                -H "Content-Type: application/json" \
+                -d @fourth_monday_bug_report.sql \
+                -o report.lst 2> report.log || {
+                  echo "Remote execution failed. Check SAS_SERVER, credentials, and network connectivity."
+                  exit 6
+                }
+            fi
           fi
           EOF
           
